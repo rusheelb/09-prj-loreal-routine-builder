@@ -1,7 +1,7 @@
 {
   "name": "loreal-routine-builder",
   "version": "1.0.0",
-  "description": "L'Oréal Smart Routine & Product Advisor",
+  "description": "L'Oréal - Smart Routine & Product Advisor",
   "type": "module",
   "main": "server.js",
   "scripts": {
