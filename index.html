@@ -58,21 +58,43 @@
             <span id="productCount" class="product-count" aria-live="polite">0 items</span>
           </div>
 
-          <div class="search-section">
-            <label for="categoryFilter" class="visually-hidden">Filter by category</label>
-            <select id="categoryFilter">
-              <option value="all" selected>All Categories</option>
-              <option value="cleanser">Cleansers</option>
-              <option value="moisturizer">Moisturizers &amp; Treatments</option>
-              <option value="skincare">Serums &amp; Skincare</option>
-              <option value="suncare">Suncare</option>
-              <option value="haircare">Haircare</option>
-              <option value="hair color">Hair Color</option>
-              <option value="hair styling">Hair Styling</option>
-              <option value="makeup">Makeup</option>
-              <option value="men's grooming">Men's Grooming</option>
-              <option value="fragrance">Fragrance</option>
-            </select>
+          <div class="catalog-controls">
+            <div class="product-search-box">
+              <label for="productSearch" class="visually-hidden">Search products</label>
+              <i class="fa-solid fa-magnifying-glass search-icon" aria-hidden="true"></i>
+              <input
+                id="productSearch"
+                type="search"
+                placeholder="Search by name, brand, or ingredient..."
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="search-section">
+              <label for="categoryFilter" class="visually-hidden">Filter by category</label>
+              <select id="categoryFilter">
+                <option value="all" selected>All Categories</option>
+                <option value="cleanser">Cleansers</option>
+                <option value="moisturizer">Moisturizers &amp; Treatments</option>
+                <option value="skincare">Serums &amp; Skincare</option>
+                <option value="suncare">Suncare</option>
+                <option value="haircare">Haircare</option>
+                <option value="hair color">Hair Color</option>
+                <option value="hair styling">Hair Styling</option>
+                <option value="makeup">Makeup</option>
+                <option value="men's grooming">Men's Grooming</option>
+                <option value="fragrance">Fragrance</option>
+              </select>
+            </div>
+
+            <button
+              type="button"
+              id="rtlToggleBtn"
+              class="rtl-toggle-btn"
+              aria-pressed="false"
+            >
+              RTL: Off
+            </button>
           </div>
         </div>
 
@@ -103,7 +125,7 @@
         <section id="advisor" class="chatbox" aria-labelledby="advisorHeading">
           <div class="panel-header">
             <h2 id="advisorHeading">Let's Build Your Routine</h2>
-            <span class="advisor-note">Step-by-step guidance</span>
+            <span class="advisor-note">Live beauty advisor</span>
           </div>
           <div id="chatWindow" class="chat-window" aria-live="polite"></div>
 
@@ -113,7 +135,8 @@
               id="userInput"
               name="userInput"
               type="text"
-              placeholder="Ask about layering order, ingredients, or your selection..."
+              dir="auto"
+              placeholder="Ask about layering order, ingredients, or latest L'Oréal releases..."
               autocomplete="off"
               required
             />

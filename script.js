@@ -1,5 +1,7 @@
 /* Get references to DOM elements */
 const categoryFilter = document.getElementById("categoryFilter");
+const productSearch = document.getElementById("productSearch");
+const rtlToggleBtn = document.getElementById("rtlToggleBtn");
 const productsContainer = document.getElementById("productsContainer");
 const productCount = document.getElementById("productCount");
 const selectedProductsList = document.getElementById("selectedProductsList");
@@ -19,12 +21,12 @@ const modalTitle = document.getElementById("modalTitle");
 const modalDescription = document.getElementById("modalDescription");
 const modalSelectBtn = document.getElementById("modalSelectBtn");
 
-/* Cloudflare Worker endpoint that forwards requests to OpenAI securely.
-   Replace this placeholder with your own Cloudflare Worker URL. */
+/* Cloudflare Worker endpoint that forwards requests to OpenAI securely */
 const WORKER_URL = "https://loreal-chatbot.rbarata2.workers.dev/";
 
-/* Key used to save selected product IDs in localStorage */
+/* Keys used to save selected products and text direction in localStorage */
 const STORAGE_KEY = "loreal_selected_product_ids";
+const DIRECTION_STORAGE_KEY = "loreal_text_direction";
 
 /* Track all loaded products, selected products, modal state, and chat history */
 let allProducts = [];
@@ -199,15 +201,27 @@ function toggleProductSelection(productId) {
   filterAndRenderProducts();
 }
 
-/* Filter products based on the selected category */
+/* Filter products by both selected category and search keyword */
 async function filterAndRenderProducts() {
   const products = await loadProducts();
   const selectedCategory = categoryFilter.value;
+  const searchQuery = productSearch.value.trim().toLowerCase();
 
-  const filteredProducts =
-    selectedCategory === "all" || selectedCategory === ""
-      ? products
-      : products.filter((product) => product.category === selectedCategory);
+  const filteredProducts = products.filter((product) => {
+    const matchesCategory =
+      selectedCategory === "all" ||
+      selectedCategory === "" ||
+      product.category === selectedCategory;
+
+    const matchesSearch =
+      searchQuery === "" ||
+      product.name.toLowerCase().includes(searchQuery) ||
+      product.brand.toLowerCase().includes(searchQuery) ||
+      product.category.toLowerCase().includes(searchQuery) ||
+      product.description.toLowerCase().includes(searchQuery);
+
+    return matchesCategory && matchesSearch;
+  });
 
   displayProducts(filteredProducts);
 }
@@ -220,7 +234,7 @@ function appendChatMessage(sender, htmlContent) {
 
   messageEl.innerHTML = `
     <span class="chat-sender">${label}</span>
-    <div class="chat-body">${htmlContent}</div>
+    <div class="chat-body" dir="auto">${htmlContent}</div>
   `;
 
   chatWindow.appendChild(messageEl);
@@ -228,19 +242,21 @@ function appendChatMessage(sender, htmlContent) {
   return messageEl;
 }
 
-/* System prompt restricting the advisor to the routine and beauty topics */
+/* System prompt encouraging live L'Oréal info with citations while staying on topic */
 function getSystemPrompt() {
   return (
-    "You are a knowledgeable L'Oréal skincare and beauty advisor. " +
+    "You are a knowledgeable L'Oréal skincare and beauty advisor with real-time web search access. " +
     "Build clear, practical, step-by-step routines (morning/evening or order of application) " +
     "using the selected products provided by the user. " +
+    "When helpful or when asked about current L'Oréal products, ingredients, or trends, search the web " +
+    "for up-to-date information and include source links or citations. " +
     "Only answer questions related to the generated routine or beauty topics such as skincare, " +
     "haircare, hair color, hair styling, makeup, men's grooming, suncare, and fragrance. " +
     "If the user asks about an unrelated topic, politely redirect them back to their routine or beauty questions."
   );
 }
 
-/* Call the Cloudflare Worker to get a response from OpenAI */
+/* Call the Cloudflare Worker using a web-search-capable OpenAI model */
 async function fetchAdvisorReply(messages) {
   if (WORKER_URL.includes("your-subdomain")) {
     throw new Error(
@@ -254,7 +270,8 @@ async function fetchAdvisorReply(messages) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4.1",
+      model: "gpt-5-search-api",
+      web_search_options: {},
       messages: messages,
     }),
   });
@@ -268,11 +285,46 @@ async function fetchAdvisorReply(messages) {
     throw new Error("Unexpected response format from the OpenAI Worker.");
   }
 
-  return data.choices[0].message.content;
+  const message = data.choices[0].message;
+  return {
+    content: message.content || "",
+    annotations: Array.isArray(message.annotations) ? message.annotations : [],
+  };
+}
+
+/* Apply LTR or RTL direction to the document and update the toggle button */
+function applyDirection(dir) {
+  const normalizedDir = dir === "rtl" ? "rtl" : "ltr";
+  document.documentElement.setAttribute("dir", normalizedDir);
+  rtlToggleBtn.setAttribute("aria-pressed", String(normalizedDir === "rtl"));
+  rtlToggleBtn.textContent = normalizedDir === "rtl" ? "RTL: On" : "RTL: Off";
+}
+
+/* Detect initial direction from URL (?dir=rtl), HTML dir attribute, saved setting, or browser language */
+function initDirection() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlDir = urlParams.get("dir");
+  const savedDir = localStorage.getItem(DIRECTION_STORAGE_KEY);
+  const htmlDir = document.documentElement.getAttribute("dir");
+  const rtlLangs = ["ar", "he", "fa", "ur"];
+  const browserLang = (navigator.language || "").toLowerCase().split("-")[0];
+
+  if (urlDir === "rtl" || urlDir === "ltr") {
+    applyDirection(urlDir);
+  } else if (savedDir === "rtl" || savedDir === "ltr") {
+    applyDirection(savedDir);
+  } else if (htmlDir === "rtl") {
+    applyDirection("rtl");
+  } else if (rtlLangs.includes(browserLang)) {
+    applyDirection("rtl");
+  } else {
+    applyDirection("ltr");
+  }
 }
 
 /* Initialize page content on load */
 async function initApp() {
+  initDirection();
   await loadProducts();
   loadSavedProducts();
   displaySelectedProducts();
@@ -283,9 +335,21 @@ async function initApp() {
   await filterAndRenderProducts();
 }
 
-/* Filter products when category dropdown changes */
+/* Filter products when category dropdown changes or search input updates */
 categoryFilter.addEventListener("change", () => {
   filterAndRenderProducts();
+});
+
+productSearch.addEventListener("input", () => {
+  filterAndRenderProducts();
+});
+
+/* Toggle RTL / LTR mode on button click */
+rtlToggleBtn.addEventListener("click", () => {
+  const currentDir = document.documentElement.getAttribute("dir");
+  const nextDir = currentDir === "rtl" ? "ltr" : "rtl";
+  applyDirection(nextDir);
+  localStorage.setItem(DIRECTION_STORAGE_KEY, nextDir);
 });
 
 /* Update the selection button text inside the open product modal */
@@ -422,12 +486,71 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-/* Format plain AI text safely with simple bold and line-break formatting */
-function formatAdvisorReply(text) {
-  const safeText = escapeHtml(text);
-  return safeText
+/* Validate that a link URL uses http or https */
+function isSafeHttpUrl(url) {
+  return /^https?:\/\//i.test(url);
+}
+
+/* Format AI reply safely with bold text, clickable links, and citation sources */
+function formatAdvisorReply(text, annotations = []) {
+  let formatted = escapeHtml(text);
+
+  /* Convert Markdown links [Label](https://...) into clickable links */
+  formatted = formatted.replace(
+    /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    (match, label, url) => {
+      if (!isSafeHttpUrl(url)) {
+        return label;
+      }
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="advisor-link">${label}</a>`;
+    }
+  );
+
+  /* Convert remaining plain URLs into clickable links */
+  formatted = formatted.replace(
+    /(^|[\s(>])(https?:\/\/[^\s<)]+)/g,
+    (match, prefix, url) => {
+      if (!isSafeHttpUrl(url)) {
+        return match;
+      }
+      return `${prefix}<a href="${url}" target="_blank" rel="noopener noreferrer" class="advisor-link">${url}</a>`;
+    }
+  );
+
+  formatted = formatted
+    .replace(/^#{1,3}\s+(.+)$/gm, "<strong>$1</strong>")
+    .replace(/^---+$/gm, "")
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\n/g, "<br />");
+
+  /* Collect unique citation links returned in OpenAI annotations */
+  const citationMap = new Map();
+  annotations.forEach((annotation) => {
+    const citation = annotation.url_citation || annotation;
+    if (citation && isSafeHttpUrl(citation.url)) {
+      citationMap.set(citation.url, citation.title || citation.url);
+    }
+  });
+
+  if (citationMap.size > 0) {
+    const sourceItems = Array.from(citationMap.entries())
+      .map(
+        ([url, title]) =>
+          `<li><a href="${url}" target="_blank" rel="noopener noreferrer" class="advisor-link">${escapeHtml(
+            title
+          )}</a></li>`
+      )
+      .join("");
+
+    formatted += `
+      <div class="advisor-sources">
+        <span class="advisor-sources-label">Sources</span>
+        <ul>${sourceItems}</ul>
+      </div>
+    `;
+  }
+
+  return formatted;
 }
 
 /* Generate a personalized routine via the OpenAI Cloudflare Worker */
@@ -471,10 +594,13 @@ generateRoutineBtn.addEventListener("click", async () => {
   );
 
   try {
-    const reply = await fetchAdvisorReply(conversationHistory);
-    conversationHistory.push({ role: "assistant", content: reply });
+    const replyData = await fetchAdvisorReply(conversationHistory);
+    conversationHistory.push({ role: "assistant", content: replyData.content });
     loadingBubble.remove();
-    appendChatMessage("advisor", formatAdvisorReply(reply));
+    appendChatMessage(
+      "advisor",
+      formatAdvisorReply(replyData.content, replyData.annotations)
+    );
   } catch (error) {
     loadingBubble.remove();
     appendChatMessage("advisor", escapeHtml(error.message));
@@ -527,10 +653,13 @@ chatForm.addEventListener("submit", async (e) => {
   const loadingBubble = appendChatMessage("advisor", "Thinking...");
 
   try {
-    const reply = await fetchAdvisorReply(conversationHistory);
-    conversationHistory.push({ role: "assistant", content: reply });
+    const replyData = await fetchAdvisorReply(conversationHistory);
+    conversationHistory.push({ role: "assistant", content: replyData.content });
     loadingBubble.remove();
-    appendChatMessage("advisor", formatAdvisorReply(reply));
+    appendChatMessage(
+      "advisor",
+      formatAdvisorReply(replyData.content, replyData.annotations)
+    );
   } catch (error) {
     /* Remove the failed user message so history stays clean on retry */
     conversationHistory.pop();
